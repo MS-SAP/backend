@@ -11,6 +11,7 @@ import * as tokenController from "./controllers/tokenController";
 import * as matchController from "./controllers/matchController";
 import * as screeningController from "./controllers/screeningController";
 import * as certificateController from "./controllers/certificateController";
+import * as phoneController from "./controllers/phoneController";
 import * as courseController from "./controllers/courseController";
 import * as registrationController from "./controllers/registrationController";
 import { configure, connectLogger, getLogger } from "log4js";
@@ -44,6 +45,7 @@ createConnection().then(() => {
 
     configureUserAPI();
     configureCertificateAPI();
+    configurePhoneAPI();
     configureTokenAPI();
     configureCourseAPI();
     configureScreenerAPI();
@@ -107,6 +109,13 @@ createConnection().then(() => {
         certificateRouter.use(authCheckFactory());
         certificateRouter.get("/:student/:pupil", certificateController.certificateHandler);
         app.use("/api/certificate", certificateRouter);
+    }
+
+    function configurePhoneAPI() {
+        const phoneRouter = express.Router();
+        phoneRouter.get("/verify", phoneController.verifyNumber);
+        phoneRouter.get("/requestverify", phoneController.requestVerifyNumber);
+        app.use("/api/phone", phoneRouter);
     }
 
     function configureCourseAPI() {
