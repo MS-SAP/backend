@@ -2,13 +2,18 @@ import { EntityManager } from "typeorm";
 import { getLogger, Logger } from "log4js";
 import mailjet from "../../../common/mails/mailjet";
 import { Match } from "../../../common/entity/Match";
-import { sendMatchFollowUpStudent, sendMatchFollowUpPupil } from "../../../common/mails/match-follow-up";
-import * as moment from "moment-timezone";
+import {
+    sendMatchFollowUpStudent,
+    sendMatchFollowUpPupil
+} from "../../../common/mails/match-follow-up";
+import moment from "moment-timezone";
 
 const logger = getLogger();
 
 export default async function execute(manager: EntityManager) {
-    logger.info("Follow-Up job: looking for matches that were created 7 days ago");
+    logger.info(
+        "Follow-Up job: looking for matches that were created 7 days ago"
+    );
     await sendMatchFollowUps(manager);
 }
 
@@ -30,7 +35,9 @@ async function sendMatchFollowUps(manager: EntityManager) {
     }
 }
 
-async function getStudentsForFollowUps(manager: EntityManager): Promise<Match[]> {
+async function getStudentsForFollowUps(
+    manager: EntityManager
+): Promise<Match[]> {
     const preselectedMatches = await manager
         .createQueryBuilder()
         .select("m")
@@ -57,12 +64,15 @@ async function getPupilsForFollowUps(manager: EntityManager): Promise<Match[]> {
 function filterMatches(matches: Match[]): Match[] {
     const now = new Date();
     const sevenDaysAgo = moment(now).subtract(7, "days").toDate();
-    return matches.filter(m => {
+    return matches.filter((m) => {
         return m.createdAt <= sevenDaysAgo;
     });
 }
 
-async function sendFollowUpsToStudents(manager: EntityManager, matches: Match[]) {
+async function sendFollowUpsToStudents(
+    manager: EntityManager,
+    matches: Match[]
+) {
     try {
         for (const m of matches) {
             await sendMatchFollowUpStudent(m.student, m.pupil);
@@ -70,8 +80,11 @@ async function sendFollowUpsToStudents(manager: EntityManager, matches: Match[])
             await manager.save(Match, m);
         }
     } catch (e) {
-        if (e.statusCode === mailjet.ErrorCodes.RATE_LIMIT) { //handle rate limit errors in mailjet
-            logger.info("Hit rate limit while sending follow-ups to students -> the missing mails will be sent tomorrow...");
+        if (e.statusCode === mailjet.ErrorCodes.RATE_LIMIT) {
+            //handle rate limit errors in mailjet
+            logger.info(
+                "Hit rate limit while sending follow-ups to students -> the missing mails will be sent tomorrow..."
+            );
             return;
         }
         throw e;
@@ -86,8 +99,11 @@ async function sendFollowUpsToPupils(manager: EntityManager, matches: Match[]) {
             await manager.save(Match, m);
         }
     } catch (e) {
-        if (e.statusCode === mailjet.ErrorCodes.RATE_LIMIT) { //handle rate limit errors in mailjet
-            logger.info("Hit rate limit while sending follow-ups to pupils -> the missing mails will be sent tomorrow...");
+        if (e.statusCode === mailjet.ErrorCodes.RATE_LIMIT) {
+            //handle rate limit errors in mailjet
+            logger.info(
+                "Hit rate limit while sending follow-ups to pupils -> the missing mails will be sent tomorrow..."
+            );
             return;
         }
         throw e;

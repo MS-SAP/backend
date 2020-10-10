@@ -11,7 +11,11 @@ import {
     checkName,
     checkSubject
 } from "./format";
-import { ScreeningStatus, Student, TeacherModule } from "../../../common/entity/Student";
+import {
+    ScreeningStatus,
+    Student,
+    TeacherModule
+} from "../../../common/entity/Student";
 import { Pupil } from "../../../common/entity/Pupil";
 import { Person } from "../../../common/entity/Person";
 import { Match } from "../../../common/entity/Match";
@@ -20,10 +24,11 @@ import { getTransactionLog } from "../../../common/transactionlog";
 import UpdatePersonalEvent from "../../../common/transactionlog/types/UpdatePersonalEvent";
 import UpdateSubjectsEvent from "../../../common/transactionlog/types/UpdateSubjectsEvent";
 import DeActivateEvent from "../../../common/transactionlog/types/DeActivateEvent";
-import { sendFirstScreeningInvitationToInstructor } from "../../../common/administration/screening/initial-invitations";
+import { sendScreeningInvitation } from "../../../common/administration/screening/initial-invitations";
 import { State } from "../../../common/entity/State";
 import { EnumReverseMappings } from "../../../common/util/enumReverseMapping";
-import * as moment from "moment-timezone";
+import moment from "moment-timezone";
+import { saveUser } from "../../../common/util/databaseUtil";
 
 const logger = getLogger();
 
@@ -151,13 +156,23 @@ export async function putHandler(req: Request, res: Response) {
 
     try {
         let b = req.body;
-        if (typeof b.firstname == "string" &&
+        if (
+            typeof b.firstname == "string" &&
             typeof b.lastname == "string" &&
             (b.grade == undefined || typeof b.grade == "number") &&
-            (b.matchesRequested == undefined || typeof b.matchesRequested == "number")) {
-            if (req.params.id != undefined && res.locals.user instanceof Person) {
+            (b.matchesRequested == undefined ||
+                typeof b.matchesRequested == "number")
+        ) {
+            if (
+                req.params.id != undefined &&
+                res.locals.user instanceof Person
+            ) {
                 try {
-                    status = await putPersonal(req.params.id, b, res.locals.user);
+                    status = await putPersonal(
+                        req.params.id,
+                        b,
+                        res.locals.user
+                    );
                 } catch (e) {
                     logger.warn("Error PUT /user: " + e.message);
                     logger.debug(e);
@@ -220,24 +235,34 @@ export async function putSubjectsHandler(req: Request, res: Response) {
             status = 400;
         } else {
             let subjectType = 0; // Short type
-            if (b.length > 0 && b[0].minGrade != undefined && b[0].maxGrade != undefined)
+            if (
+                b.length > 0 &&
+                b[0].minGrade != undefined &&
+                b[0].maxGrade != undefined
+            )
                 subjectType = 1; // Long Type
 
             for (let i = 0; i < b.length; i++) {
                 let elem = b[i];
                 if (subjectType == 0) {
-                    if (typeof elem.name == "string" && checkSubject(elem.name)
+                    if (
+                        typeof elem.name == "string" &&
+                        checkSubject(elem.name)
                     ) {
                         let subject = new ApiSubject();
                         subject.name = elem.name;
                         subjects.push(subject);
                     } else {
-                        logger.error("Invalid format for shortType subjects: Missing or wrongly typed properties in ", elem);
+                        logger.error(
+                            "Invalid format for shortType subjects: Missing or wrongly typed properties in ",
+                            elem
+                        );
                         logger.debug("Index " + i, b);
                         status = 400;
                         break;
                     }
-                } else if (typeof elem.name == "string" &&
+                } else if (
+                    typeof elem.name == "string" &&
                     typeof elem.minGrade == "number" &&
                     typeof elem.maxGrade == "number" &&
                     elem.minGrade >= 1 &&
@@ -245,16 +270,18 @@ export async function putSubjectsHandler(req: Request, res: Response) {
                     elem.minGrade <= elem.maxGrade &&
                     elem.maxGrade >= 1 &&
                     elem.maxGrade <= 13 &&
-                    checkSubject(elem.name)) {
-
+                    checkSubject(elem.name)
+                ) {
                     let subject = new ApiSubject();
                     subject.name = elem.name;
                     subject.minGrade = elem.minGrade;
                     subject.maxGrade = elem.maxGrade;
                     subjects.push(subject);
-
                 } else {
-                    logger.error("Invalid format for longType subjects: Missing or wrongly typed properties in ", elem);
+                    logger.error(
+                        "Invalid format for longType subjects: Missing or wrongly typed properties in ",
+                        elem
+                    );
                     logger.debug("Index " + i, b);
                     status = 400;
                     break;
@@ -262,7 +289,11 @@ export async function putSubjectsHandler(req: Request, res: Response) {
             }
         }
 
-        if (status < 300 && req.params.id != undefined && res.locals.user instanceof Person) {
+        if (
+            status < 300 &&
+            req.params.id != undefined &&
+            res.locals.user instanceof Person
+        ) {
             try {
                 status = await putSubjects(req.params.id, b, res.locals.user);
             } catch (e) {
@@ -312,18 +343,22 @@ export async function putActiveHandler(req: Request, res: Response) {
     let status = 204;
 
     try {
-        if (req.params.id != undefined &&
+        if (
+            req.params.id != undefined &&
             req.params.active != undefined &&
-            res.locals.user instanceof Person) {
+            res.locals.user instanceof Person
+        ) {
             try {
-
                 let active: boolean;
                 if (req.params.active == "true") {
                     active = true;
                 } else if (req.params.active == "false") {
                     active = false;
                 } else {
-                    logger.warn("Invalid parameter :active for PUT /user/active: " + req.params.active);
+                    logger.warn(
+                        "Invalid parameter :active for PUT /user/active: " +
+                            req.params.active
+                    );
                     status = 400;
                 }
 
@@ -350,8 +385,10 @@ export async function putActiveHandler(req: Request, res: Response) {
     res.status(status).end();
 }
 
-
-async function get(wix_id: string, person: Pupil | Student): Promise<ApiGetUser> {
+async function get(
+    wix_id: string,
+    person: Pupil | Student
+): Promise<ApiGetUser> {
     const entityManager = getManager();
 
     if (person == null) {
@@ -359,7 +396,12 @@ async function get(wix_id: string, person: Pupil | Student): Promise<ApiGetUser>
         return null;
     }
     if (person.wix_id != wix_id) {
-        logger.warn("Person with id " + person.wix_id + " tried to access data from id " + wix_id);
+        logger.warn(
+            "Person with id " +
+                person.wix_id +
+                " tried to access data from id " +
+                wix_id
+        );
         return null;
     }
 
@@ -377,13 +419,18 @@ async function get(wix_id: string, person: Pupil | Student): Promise<ApiGetUser>
         apiResponse.isInstructor = person.isInstructor;
         apiResponse.screeningStatus = await person.screeningStatus();
         apiResponse.instructorScreeningStatus = await person.instructorScreeningStatus();
-        apiResponse.matchesRequested = person.openMatchRequestCount <= 3 ? person.openMatchRequestCount : 3;
+        apiResponse.matchesRequested =
+            person.openMatchRequestCount <= 3
+                ? person.openMatchRequestCount
+                : 3;
         apiResponse.matches = [];
         apiResponse.dissolvedMatches = [];
         apiResponse.subjects = convertSubjects(JSON.parse(person.subjects));
         apiResponse.university = person.university;
         apiResponse.state = person.state;
-        apiResponse.lastUpdatedSettingsViaBlocker = moment(person.lastUpdatedSettingsViaBlocker).unix();
+        apiResponse.lastUpdatedSettingsViaBlocker = moment(
+            person.lastUpdatedSettingsViaBlocker
+        ).unix();
 
         let matches = await entityManager.find(Match, {
             student: person,
@@ -399,9 +446,12 @@ async function get(wix_id: string, person: Pupil | Student): Promise<ApiGetUser>
             apiMatch.lastname = matches[i].pupil.lastname;
             apiMatch.email = matches[i].pupil.email;
             apiMatch.grade = Number.parseInt(matches[i].pupil.grade);
-            apiMatch.subjects = subjectsToStringArray(JSON.parse(matches[i].pupil.subjects));
+            apiMatch.subjects = subjectsToStringArray(
+                JSON.parse(matches[i].pupil.subjects)
+            );
             apiMatch.uuid = matches[i].uuid;
-            apiMatch.jitsilink = "https://meet.jit.si/CoronaSchool-" + matches[i].uuid;
+            apiMatch.jitsilink =
+                "https://meet.jit.si/CoronaSchool-" + matches[i].uuid;
             apiMatch.date = matches[i].createdAt.getTime();
 
             apiResponse.matches.push(apiMatch);
@@ -416,7 +466,8 @@ async function get(wix_id: string, person: Pupil | Student): Promise<ApiGetUser>
                 JSON.parse(dissolvedMatches[i].pupil.subjects)
             );
             apiMatch.uuid = dissolvedMatches[i].uuid;
-            apiMatch.jitsilink = "https://meet.jit.si/CoronaSchool-" + dissolvedMatches[i].uuid;
+            apiMatch.jitsilink =
+                "https://meet.jit.si/CoronaSchool-" + dissolvedMatches[i].uuid;
             apiMatch.date = dissolvedMatches[i].createdAt.getTime();
 
             apiResponse.dissolvedMatches.push(apiMatch);
@@ -426,13 +477,20 @@ async function get(wix_id: string, person: Pupil | Student): Promise<ApiGetUser>
         apiResponse.isPupil = person.isPupil;
         apiResponse.isParticipant = person.isParticipant;
         apiResponse.grade = parseInt(person.grade);
-        apiResponse.matchesRequested = person.openMatchRequestCount <= 1 ? person.openMatchRequestCount : 1;
+        apiResponse.matchesRequested =
+            person.openMatchRequestCount <= 1
+                ? person.openMatchRequestCount
+                : 1;
         apiResponse.matches = [];
         apiResponse.dissolvedMatches = [];
-        apiResponse.subjects = toPupilSubjectFormat(convertSubjects(JSON.parse(person.subjects), false)); //if the subjects contain grade information, it should be stripped off
+        apiResponse.subjects = toPupilSubjectFormat(
+            convertSubjects(JSON.parse(person.subjects), false)
+        ); //if the subjects contain grade information, it should be stripped off
         apiResponse.state = person.state;
         apiResponse.schoolType = person.schooltype;
-        apiResponse.lastUpdatedSettingsViaBlocker = moment(person.lastUpdatedSettingsViaBlocker).unix();
+        apiResponse.lastUpdatedSettingsViaBlocker = moment(
+            person.lastUpdatedSettingsViaBlocker
+        ).unix();
 
         let matches = await entityManager.find(Match, {
             pupil: person,
@@ -451,7 +509,8 @@ async function get(wix_id: string, person: Pupil | Student): Promise<ApiGetUser>
                 JSON.parse(matches[i].student.subjects)
             );
             apiMatch.uuid = matches[i].uuid;
-            apiMatch.jitsilink = "https://meet.jit.si/CoronaSchool-" + matches[i].uuid;
+            apiMatch.jitsilink =
+                "https://meet.jit.si/CoronaSchool-" + matches[i].uuid;
             apiMatch.date = matches[i].createdAt.getTime();
 
             apiResponse.matches.push(apiMatch);
@@ -465,7 +524,8 @@ async function get(wix_id: string, person: Pupil | Student): Promise<ApiGetUser>
                 JSON.parse(dissolvedMatches[i].student.subjects)
             );
             apiMatch.uuid = dissolvedMatches[i].uuid;
-            apiMatch.jitsilink = "https://meet.jit.si/CoronaSchool-" + dissolvedMatches[i].uuid;
+            apiMatch.jitsilink =
+                "https://meet.jit.si/CoronaSchool-" + dissolvedMatches[i].uuid;
             apiMatch.date = dissolvedMatches[i].createdAt.getTime();
 
             apiResponse.dissolvedMatches.push(apiMatch);
@@ -480,7 +540,11 @@ async function get(wix_id: string, person: Pupil | Student): Promise<ApiGetUser>
     return apiResponse;
 }
 
-async function putPersonal(wix_id: string, req: ApiPutUser, person: Pupil | Student): Promise<number> {
+async function putPersonal(
+    wix_id: string,
+    req: ApiPutUser,
+    person: Pupil | Student
+): Promise<number> {
     const entityManager = getManager();
     const transactionLog = getTransactionLog();
 
@@ -489,7 +553,12 @@ async function putPersonal(wix_id: string, req: ApiPutUser, person: Pupil | Stud
         return 500;
     }
     if (person.wix_id != wix_id) {
-        logger.warn("Person with id " + person.wix_id + "tried to access data from id " + wix_id);
+        logger.warn(
+            "Person with id " +
+                person.wix_id +
+                "tried to access data from id " +
+                wix_id
+        );
         return 403;
     }
 
@@ -499,7 +568,9 @@ async function putPersonal(wix_id: string, req: ApiPutUser, person: Pupil | Stud
     person.lastname = req.lastname.trim();
 
     if (!checkName(person.firstname) || !checkName(person.lastname)) {
-        logger.warn("Invalid names: " + person.firstname + " / " + person.lastname);
+        logger.warn(
+            "Invalid names: " + person.firstname + " / " + person.lastname
+        );
     }
 
     let type: ObjectType<Person>;
@@ -507,10 +578,26 @@ async function putPersonal(wix_id: string, req: ApiPutUser, person: Pupil | Stud
         type = Student;
         // ++++ OPEN MATCH REQUEST COUNT ++++
         // Check if number of requested matches is valid
-        let matchCount = await entityManager.count(Match, { student: person, dissolved: false });
-        if (req.matchesRequested > 3 || req.matchesRequested < 0 || !Number.isInteger(req.matchesRequested) || req.matchesRequested + matchCount > 6
-            || (req.matchesRequested > 1 && await person.screeningStatus() != ScreeningStatus.Accepted && await person.instructorScreeningStatus() != ScreeningStatus.Accepted)) {
-            logger.warn("User (with " + matchCount + " matches) wants to set invalid number of matches requested: " + req.matchesRequested);
+        let matchCount = await entityManager.count(Match, {
+            student: person,
+            dissolved: false
+        });
+        if (
+            req.matchesRequested > 3 ||
+            req.matchesRequested < 0 ||
+            !Number.isInteger(req.matchesRequested) ||
+            req.matchesRequested + matchCount > 6 ||
+            (req.matchesRequested > 1 &&
+                (await person.screeningStatus()) != ScreeningStatus.Accepted &&
+                (await person.instructorScreeningStatus()) !=
+                    ScreeningStatus.Accepted)
+        ) {
+            logger.warn(
+                "User (with " +
+                    matchCount +
+                    " matches) wants to set invalid number of matches requested: " +
+                    req.matchesRequested
+            );
             return 400;
         }
 
@@ -523,7 +610,9 @@ async function putPersonal(wix_id: string, req: ApiPutUser, person: Pupil | Stud
         if (req.state) {
             const state = EnumReverseMappings.State(req.state);
             if (!state) {
-                logger.warn(`User wants to set an invalid value "${req.state}" for state`);
+                logger.warn(
+                    `User wants to set an invalid value "${req.state}" for state`
+                );
                 return 400;
             }
             person.state = state;
@@ -531,9 +620,10 @@ async function putPersonal(wix_id: string, req: ApiPutUser, person: Pupil | Stud
 
         // ++++ LAST UPDATED SETTINGS VIA BLOCKER ++++
         if (req.lastUpdatedSettingsViaBlocker) {
-            person.lastUpdatedSettingsViaBlocker = moment.unix(req.lastUpdatedSettingsViaBlocker).toDate();
-        }
-        else {
+            person.lastUpdatedSettingsViaBlocker = moment
+                .unix(req.lastUpdatedSettingsViaBlocker)
+                .toDate();
+        } else {
             person.lastUpdatedSettingsViaBlocker = null;
         }
     } else if (person instanceof Pupil) {
@@ -545,12 +635,18 @@ async function putPersonal(wix_id: string, req: ApiPutUser, person: Pupil | Stud
             pupil: person,
             dissolved: false
         });
-        if (req.matchesRequested > 1 ||
+        if (
+            req.matchesRequested > 1 ||
             req.matchesRequested < 0 ||
             !Number.isInteger(req.matchesRequested) ||
-            req.matchesRequested + matchCount > 1) {
-
-            logger.warn("User (with " + matchCount + " matches) wants to set invalid number of matches requested: " + req.matchesRequested);
+            req.matchesRequested + matchCount > 1
+        ) {
+            logger.warn(
+                "User (with " +
+                    matchCount +
+                    " matches) wants to set invalid number of matches requested: " +
+                    req.matchesRequested
+            );
             return 400;
         }
 
@@ -560,14 +656,18 @@ async function putPersonal(wix_id: string, req: ApiPutUser, person: Pupil | Stud
         if (Number.isInteger(req.grade) && req.grade >= 1 && req.grade <= 13) {
             person.grade = req.grade + ". Klasse";
         } else {
-            logger.warn("User who is a pupil wants to set an invalid grade! It is ignored.");
+            logger.warn(
+                "User who is a pupil wants to set an invalid grade! It is ignored."
+            );
         }
 
         // ++++ SCHOOL TYPE ++++
         if (req.schoolType) {
             const schoolType = EnumReverseMappings.SchoolType(req.schoolType);
             if (!schoolType) {
-                logger.warn(`User wants to set an invalid value "${req.schoolType}" for schoolType`);
+                logger.warn(
+                    `User wants to set an invalid value "${req.schoolType}" for schoolType`
+                );
                 return 400;
             }
             person.schooltype = schoolType;
@@ -577,7 +677,9 @@ async function putPersonal(wix_id: string, req: ApiPutUser, person: Pupil | Stud
         if (req.state) {
             const state = EnumReverseMappings.State(req.state);
             if (!state) {
-                logger.warn(`User wants to set an invalid value "${req.state}" for state`);
+                logger.warn(
+                    `User wants to set an invalid value "${req.state}" for state`
+                );
                 return 400;
             }
             person.state = state;
@@ -585,9 +687,10 @@ async function putPersonal(wix_id: string, req: ApiPutUser, person: Pupil | Stud
 
         // ++++ LAST UPDATED SETTINGS VIA BLOCKER ++++
         if (req.lastUpdatedSettingsViaBlocker) {
-            person.lastUpdatedSettingsViaBlocker = moment.unix(req.lastUpdatedSettingsViaBlocker).toDate();
-        }
-        else {
+            person.lastUpdatedSettingsViaBlocker = moment
+                .unix(req.lastUpdatedSettingsViaBlocker)
+                .toDate();
+        } else {
             person.lastUpdatedSettingsViaBlocker = null;
         }
     } else {
@@ -599,7 +702,11 @@ async function putPersonal(wix_id: string, req: ApiPutUser, person: Pupil | Stud
     try {
         await entityManager.save(type, person);
         await transactionLog.log(new UpdatePersonalEvent(person, oldPerson));
-        logger.info(`Updated user ${person.firstname} ${person.lastname} (ID ${person.wix_id}, Type ${type.toString()}`);
+        logger.info(
+            `Updated user ${person.firstname} ${person.lastname} (ID ${
+                person.wix_id
+            }, Type ${type.toString()}`
+        );
         logger.debug(person);
     } catch (e) {
         logger.error("Can't update user: " + e.message);
@@ -610,7 +717,11 @@ async function putPersonal(wix_id: string, req: ApiPutUser, person: Pupil | Stud
     return 204;
 }
 
-async function putSubjects(wix_id: string, req: ApiSubject[], person: Pupil | Student): Promise<number> {
+async function putSubjects(
+    wix_id: string,
+    req: ApiSubject[],
+    person: Pupil | Student
+): Promise<number> {
     const entityManager = getManager();
     const transactionLog = getTransactionLog();
 
@@ -619,7 +730,12 @@ async function putSubjects(wix_id: string, req: ApiSubject[], person: Pupil | St
         return 500;
     }
     if (person.wix_id != wix_id) {
-        logger.warn("Person with id " + person.wix_id + "tried to access data from id " + wix_id);
+        logger.warn(
+            "Person with id " +
+                person.wix_id +
+                "tried to access data from id " +
+                wix_id
+        );
         return 403;
     }
 
@@ -627,17 +743,11 @@ async function putSubjects(wix_id: string, req: ApiSubject[], person: Pupil | St
 
     let type: ObjectType<Person>;
     if (person instanceof Student) {
-
         type = Student;
-        if (!person.isStudent)
-            person.isStudent = true;
-
+        if (!person.isStudent) person.isStudent = true;
     } else if (person instanceof Pupil) {
-
         type = Pupil;
-        if (!person.isPupil)
-            person.isPupil = true;
-
+        if (!person.isPupil) person.isPupil = true;
     } else {
         logger.error("Unknown type of person: " + typeof person);
         logger.debug(person);
@@ -659,7 +769,11 @@ async function putSubjects(wix_id: string, req: ApiSubject[], person: Pupil | St
     return 204;
 }
 
-async function putActive(wix_id: string, active: boolean, person: Pupil | Student): Promise<number> {
+async function putActive(
+    wix_id: string,
+    active: boolean,
+    person: Pupil | Student
+): Promise<number> {
     const entityManager = getManager();
     const transactionLog = getTransactionLog();
 
@@ -668,7 +782,12 @@ async function putActive(wix_id: string, active: boolean, person: Pupil | Studen
         return 500;
     }
     if (person.wix_id != wix_id) {
-        logger.warn("Person with id " + person.wix_id + " tried to access data from id " + wix_id);
+        logger.warn(
+            "Person with id " +
+                person.wix_id +
+                " tried to access data from id " +
+                wix_id
+        );
         return 403;
     }
 
@@ -686,14 +805,21 @@ async function putActive(wix_id: string, active: boolean, person: Pupil | Studen
     try {
         if (active && !person.active) {
             // Activate if deactivated
-            logger.info("Activating person " + person.firstname + " " + person.lastname);
+            logger.info(
+                "Activating person " + person.firstname + " " + person.lastname
+            );
             person.active = true;
 
             await entityManager.save(type, person);
             await transactionLog.log(new DeActivateEvent(person, true));
         } else if (!active && person.active) {
             // Deactivate if active
-            logger.info("Deactivating person " + person.firstname + " " + person.lastname);
+            logger.info(
+                "Deactivating person " +
+                    person.firstname +
+                    " " +
+                    person.lastname
+            );
 
             // Step 1: Dissolve all matches
             let options;
@@ -720,7 +846,9 @@ async function putActive(wix_id: string, active: boolean, person: Pupil | Studen
             await transactionLog.log(new DeActivateEvent(person, false));
         }
     } catch (e) {
-        logger.error("Can't " + (active ? "" : "de") + "activate user: " + e.message);
+        logger.error(
+            "Can't " + (active ? "" : "de") + "activate user: " + e.message
+        );
         logger.debug(person, e);
         return 500;
     }
@@ -729,7 +857,10 @@ async function putActive(wix_id: string, active: boolean, person: Pupil | Studen
 }
 
 // Support for legacy formats
-function convertSubjects(oldSubjects: Array<any>, longtype: boolean = true): ApiSubject[] {
+function convertSubjects(
+    oldSubjects: Array<any>,
+    longtype: boolean = true
+): ApiSubject[] {
     let subjects = [];
     for (let i = 0; i < oldSubjects.length; i++) {
         if (typeof oldSubjects[i] == "string") {
@@ -770,8 +901,10 @@ function subjectsToStringArray(subjects: Array<any>): string[] {
     return stringSubjects;
 }
 
-function toPupilSubjectFormat(subjects: {name: string, minGrade?: number, maxGrade?: number}[]): {name: string}[] {
-    return subjects.map(v => {
+function toPupilSubjectFormat(
+    subjects: { name: string; minGrade?: number; maxGrade?: number }[]
+): { name: string }[] {
+    return subjects.map((v) => {
         return {
             name: v.name
         };
@@ -803,26 +936,40 @@ function toPupilSubjectFormat(subjects: {name: string, minGrade?: number, maxGra
  * @apiUse StatusUnauthorized
  * @apiUse StatusInternalServerError
  */
-export async function postUserRoleInstructorHandler(req: Request, res: Response) {
+export async function postUserRoleInstructorHandler(
+    req: Request,
+    res: Response
+) {
     let status = 204;
-    if (res.locals.user instanceof Student &&
+    if (
+        res.locals.user instanceof Student &&
         req.params.id != undefined &&
-        typeof req.body.isOfficial == 'boolean' &&
-        typeof req.body.msg == 'string') {
-
+        typeof req.body.isOfficial == "boolean" &&
+        typeof req.body.msg == "string"
+    ) {
         if (req.body.isOfficial) {
-            if (typeof req.body.university !== 'string' ||
-                typeof req.body.module !== 'string' ||
-                typeof req.body.hours !== 'number') {
+            if (
+                typeof req.body.university !== "string" ||
+                typeof req.body.module !== "string" ||
+                typeof req.body.hours !== "number"
+            ) {
                 status = 400;
-                logger.error("Tutor registration with isOfficial has incomplete/invalid parameters");
+                logger.error(
+                    "Tutor registration with isOfficial has incomplete/invalid parameters"
+                );
             }
         }
 
         if (status < 300) {
-            status = await postUserRoleInstructor(req.params.id, res.locals.user, req.body);
+            status = await postUserRoleInstructor(
+                req.params.id,
+                res.locals.user,
+                req.body
+            );
         } else {
-            logger.error("Malformed parameters in optional fields for Instructor role change");
+            logger.error(
+                "Malformed parameters in optional fields for Instructor role change"
+            );
             status = 400;
         }
     } else {
@@ -833,9 +980,18 @@ export async function postUserRoleInstructorHandler(req: Request, res: Response)
     res.status(status).end();
 }
 
-async function postUserRoleInstructor(wixId: string, student: Student, apiInstructor: ApiUserRoleInstructor): Promise<number> {
+async function postUserRoleInstructor(
+    wixId: string,
+    student: Student,
+    apiInstructor: ApiUserRoleInstructor
+): Promise<number> {
     if (wixId != student.wix_id) {
-        logger.warn("Person with id " + student.wix_id + " tried to access data from id " + wixId);
+        logger.warn(
+            "Person with id " +
+                student.wix_id +
+                " tried to access data from id " +
+                wixId
+        );
         return 403;
     }
 
@@ -850,8 +1006,13 @@ async function postUserRoleInstructor(wixId: string, student: Student, apiInstru
     student.isInstructor = true;
 
     if (apiInstructor.isOfficial) {
-        if (apiInstructor.university.length == 0 || apiInstructor.university.length > 100) {
-            logger.warn("apiInstructor.university outside of length restrictions");
+        if (
+            apiInstructor.university.length == 0 ||
+            apiInstructor.university.length > 100
+        ) {
+            logger.warn(
+                "apiInstructor.university outside of length restrictions"
+            );
             return 400;
         }
 
@@ -918,7 +1079,10 @@ async function postUserRoleInstructor(wixId: string, student: Student, apiInstru
                 student.state = State.OTHER;
                 break;
             default:
-                logger.error("Invalid value for Instructor role change state: " + apiInstructor.state);
+                logger.error(
+                    "Invalid value for Instructor role change state: " +
+                        apiInstructor.state
+                );
                 return 400;
         }
 
@@ -933,7 +1097,10 @@ async function postUserRoleInstructor(wixId: string, student: Student, apiInstru
                 student.module = TeacherModule.OTHER;
                 break;
             default:
-                logger.warn("Tutor registration has invalid string for teacher module " + apiInstructor.module);
+                logger.warn(
+                    "Tutor registration has invalid string for teacher module " +
+                        apiInstructor.module
+                );
                 return 400;
         }
 
@@ -943,11 +1110,10 @@ async function postUserRoleInstructor(wixId: string, student: Student, apiInstru
     }
 
     try {
-
         // TODO: transaction log
         await entityManager.save(Student, student);
         // Invite to instructor screening
-        await sendFirstScreeningInvitationToInstructor(entityManager, student);
+        await sendScreeningInvitation(saveUser, student);
     } catch (e) {
         logger.error("Unable to update student status: " + e.message);
         return 500;
@@ -984,22 +1150,27 @@ async function postUserRoleInstructor(wixId: string, student: Student, apiInstru
 export async function postUserRoleTutorHandler(req: Request, res: Response) {
     let status = 204;
 
-    if (res.locals.user instanceof Student
-        && req.params.id != undefined
-        && req.body instanceof Array) {
+    if (
+        res.locals.user instanceof Student &&
+        req.params.id != undefined &&
+        req.body instanceof Array
+    ) {
         let subjects: ApiSubjectStudent[] = [];
         for (let testSubject of req.body) {
-            if (typeof testSubject.name == "string" &&
+            if (
+                typeof testSubject.name == "string" &&
                 checkSubject(testSubject.name) &&
                 typeof testSubject.minGrade == "number" &&
                 Number.isInteger(testSubject.minGrade) &&
                 typeof testSubject.maxGrade == "number" &&
                 Number.isInteger(testSubject.maxGrade) &&
-                testSubject.minGrade >= 1 && testSubject.minGrade <= 13 &&
-                testSubject.maxGrade >= 1 && testSubject.maxGrade <= 13 &&
-                testSubject.minGrade <= testSubject.maxGrade) {
-
-                let newSubject = new ApiSubjectStudent;
+                testSubject.minGrade >= 1 &&
+                testSubject.minGrade <= 13 &&
+                testSubject.maxGrade >= 1 &&
+                testSubject.maxGrade <= 13 &&
+                testSubject.minGrade <= testSubject.maxGrade
+            ) {
+                let newSubject = new ApiSubjectStudent();
                 newSubject.name = testSubject.name;
                 newSubject.minGrade = testSubject.minGrade;
                 newSubject.maxGrade = testSubject.maxGrade;
@@ -1012,7 +1183,11 @@ export async function postUserRoleTutorHandler(req: Request, res: Response) {
         }
 
         if (status < 300 && subjects.length >= 1) {
-            status = await postUserRoleTutor(req.params.id, res.locals.user, subjects);
+            status = await postUserRoleTutor(
+                req.params.id,
+                res.locals.user,
+                subjects
+            );
         }
     } else {
         logger.warn("Missing request parameters for roleTutorHandler.");
@@ -1022,9 +1197,18 @@ export async function postUserRoleTutorHandler(req: Request, res: Response) {
     res.status(status).end();
 }
 
-async function postUserRoleTutor(wixId: string, student: Student, subjects: ApiSubjectStudent[]): Promise<number> {
+async function postUserRoleTutor(
+    wixId: string,
+    student: Student,
+    subjects: ApiSubjectStudent[]
+): Promise<number> {
     if (wixId != student.wix_id) {
-        logger.warn("Person with id " + student.wix_id + " tried to access data from id " + wixId);
+        logger.warn(
+            "Person with id " +
+                student.wix_id +
+                " tried to access data from id " +
+                wixId
+        );
         return 403;
     }
 

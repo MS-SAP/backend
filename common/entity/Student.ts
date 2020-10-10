@@ -1,11 +1,19 @@
-import { Column, Entity, EntityManager, Index, ManyToMany, OneToMany, OneToOne } from "typeorm";
+import {
+    Column,
+    Entity,
+    EntityManager,
+    Index,
+    ManyToMany,
+    OneToMany,
+    OneToOne
+} from "typeorm";
 import { ApiScreeningResult } from "../dto/ApiScreeningResult";
 import { Match } from "./Match";
 import { Screening } from "./Screening";
 import { Person } from "./Person";
 import { Course } from "./Course";
-import { Lecture } from './Lecture';
-import { State } from './State';
+import { Lecture } from "./Lecture";
+import { State } from "./State";
 import { Subcourse } from "./Subcourse";
 import { InstructorScreening } from "./InstructorScreening";
 
@@ -60,7 +68,7 @@ export class Student extends Person {
     })
     subjects: string;
 
-    @OneToMany(type => Match, match => match.student, {
+    @OneToMany((type) => Match, (match) => match.student, {
         nullable: true
     })
     matches: Promise<Match[]>;
@@ -79,13 +87,13 @@ export class Student extends Person {
     })
     isInstructor: boolean;
 
-    @ManyToMany(type => Course, course => course.instructors)
+    @ManyToMany((type) => Course, (course) => course.instructors)
     courses: Course[];
 
-    @ManyToMany(type => Subcourse, subcourse => subcourse.instructors)
+    @ManyToMany((type) => Subcourse, (subcourse) => subcourse.instructors)
     subcourses: Subcourse[];
 
-    @OneToMany(type => Lecture, lecture => lecture.instructor)
+    @OneToMany((type) => Lecture, (lecture) => lecture.instructor)
     lectures: Lecture[];
 
     @Column({
@@ -97,7 +105,7 @@ export class Student extends Person {
      * Intern data
      */
     @Column({
-        type: 'enum',
+        type: "enum",
         enum: State,
         nullable: true,
         default: State.OTHER
@@ -144,10 +152,14 @@ export class Student extends Person {
     })
     lastSentScreeningInvitationDate: Date;
 
-    @OneToOne((type) => InstructorScreening, (instructorScreening) => instructorScreening.student, {
-        nullable: true,
-        cascade: true
-    })
+    @OneToOne(
+        (type) => InstructorScreening,
+        (instructorScreening) => instructorScreening.student,
+        {
+            nullable: true,
+            cascade: true
+        }
+    )
     instructorScreening: Promise<InstructorScreening>;
 
     @Column({
@@ -170,9 +182,18 @@ export class Student extends Person {
     lastUpdatedSettingsViaBlocker: Date;
 
     async addScreeningResult(screeningResult: ApiScreeningResult) {
-        this.phone = screeningResult.phone === undefined ? this.phone : screeningResult.phone;
-        this.subjects = screeningResult.subjects === undefined ? this.subjects : screeningResult.subjects;
-        this.feedback = screeningResult.feedback === undefined ? this.feedback : screeningResult.feedback;
+        this.phone =
+            screeningResult.phone === undefined
+                ? this.phone
+                : screeningResult.phone;
+        this.subjects =
+            screeningResult.subjects === undefined
+                ? this.subjects
+                : screeningResult.subjects;
+        this.feedback =
+            screeningResult.feedback === undefined
+                ? this.feedback
+                : screeningResult.feedback;
 
         let currentScreening = await this.screening;
 
@@ -184,9 +205,18 @@ export class Student extends Person {
     }
 
     async addInstructorScreeningResult(screeningResult: ApiScreeningResult) {
-        this.phone = screeningResult.phone === undefined ? this.phone : screeningResult.phone;
-        this.subjects = screeningResult.subjects === undefined ? this.subjects : screeningResult.subjects;
-        this.feedback = screeningResult.feedback === undefined ? this.feedback : screeningResult.feedback;
+        this.phone =
+            screeningResult.phone === undefined
+                ? this.phone
+                : screeningResult.phone;
+        this.subjects =
+            screeningResult.subjects === undefined
+                ? this.subjects
+                : screeningResult.subjects;
+        this.feedback =
+            screeningResult.feedback === undefined
+                ? this.feedback
+                : screeningResult.feedback;
 
         let currentScreening = await this.instructorScreening;
 
@@ -232,21 +262,32 @@ export class Student extends Person {
     }
 
     instructorScreeningURL(): string {
-        return "https://go.oncehub.com/CourseReview?name=" + encodeURIComponent(this.firstname) + "&email=" + encodeURIComponent(this.email) + "&skip=1";
+        return (
+            "https://go.oncehub.com/CourseReview?name=" +
+            encodeURIComponent(this.firstname) +
+            "&email=" +
+            encodeURIComponent(this.email) +
+            "&skip=1"
+        );
     }
 }
 
 export enum ScreeningStatus {
     Unscreened = "UNSCREENED",
     Accepted = "ACCEPTED",
-    Rejected = "REJECTED",
+    Rejected = "REJECTED"
 }
 
-export function getAllStudents(manager: EntityManager): Promise<Student[]> | undefined {
+export function getAllStudents(
+    manager: EntityManager
+): Promise<Student[]> | undefined {
     return manager.createQueryBuilder(Student, "s").getMany(); //case insensitive query
 }
 
-export function getStudentByEmail(manager: EntityManager, email: string): Promise<Student> | undefined {
+export function getStudentByEmail(
+    manager: EntityManager,
+    email: string
+): Promise<Student> | undefined {
     return manager
         .createQueryBuilder(Student, "s")
         .where("s.email ILIKE :email", { email: email })
@@ -258,10 +299,16 @@ export function getStudentByWixID(manager: EntityManager, wixID: string) {
     return manager.findOne(Student, { wix_id: wixID });
 }
 
-export async function activeMatchesOfStudent(s: Student, manager: EntityManager) {
+export async function activeMatchesOfStudent(
+    s: Student,
+    manager: EntityManager
+) {
     return (await s.matches).filter((m) => m.dissolved === false);
 }
 
-export async function activeMatchCountOfStudent(s: Student, manager: EntityManager) {
+export async function activeMatchCountOfStudent(
+    s: Student,
+    manager: EntityManager
+) {
     return (await activeMatchesOfStudent(s, manager)).length;
 }

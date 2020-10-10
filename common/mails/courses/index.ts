@@ -1,17 +1,24 @@
 import { Course } from "../../entity/Course";
 import { Subcourse } from "../../entity/Subcourse";
 import { mailjetTemplates, sendTemplateMail } from "../index";
-import * as moment from "moment-timezone";
+import moment from "moment-timezone";
 import { getLogger } from "log4js";
 import { Student } from "../../entity/Student";
 import { Pupil } from "../../entity/Pupil";
 
 const logger = getLogger();
 
-export async function sendSubcourseCancelNotifications(course: Course, subcourse: Subcourse) {
-
+export async function sendSubcourseCancelNotifications(
+    course: Course,
+    subcourse: Subcourse
+) {
     if (subcourse.lectures.length == 0) {
-        logger.info("No lectures found: no cancellation mails sent for subcourse " + subcourse.id + " of course " + course.name);
+        logger.info(
+            "No lectures found: no cancellation mails sent for subcourse " +
+                subcourse.id +
+                " of course " +
+                course.name
+        );
         return;
     }
 
@@ -24,7 +31,15 @@ export async function sendSubcourseCancelNotifications(course: Course, subcourse
     }
 
     // Send mail or this lecture to each participant
-    logger.info("Sending cancellation mails for subcourse " + subcourse.id + " of course " + course.name + " to " + subcourse.participants.length + " participants");
+    logger.info(
+        "Sending cancellation mails for subcourse " +
+            subcourse.id +
+            " of course " +
+            course.name +
+            " to " +
+            subcourse.participants.length +
+            " participants"
+    );
     for (let participant of subcourse.participants) {
         const mail = mailjetTemplates.COURSESCANCELLED({
             participantFirstname: participant.firstname,
@@ -36,7 +51,11 @@ export async function sendSubcourseCancelNotifications(course: Course, subcourse
     }
 }
 
-export async function sendCourseUpcomingReminderInstructor(instructor: Student, course: Course, firstLecture: Date) {
+export async function sendCourseUpcomingReminderInstructor(
+    instructor: Student,
+    course: Course,
+    firstLecture: Date
+) {
     const mail = mailjetTemplates.COURSESUPCOMINGREMINDERINSTRUCTOR({
         participantFirstname: instructor.firstname,
         courseName: course.name,
@@ -46,7 +65,11 @@ export async function sendCourseUpcomingReminderInstructor(instructor: Student, 
     await sendTemplateMail(mail, instructor.email);
 }
 
-export async function sendCourseUpcomingReminderParticipant(participant: Pupil, course: Course, firstLecture: Date) {
+export async function sendCourseUpcomingReminderParticipant(
+    participant: Pupil,
+    course: Course,
+    firstLecture: Date
+) {
     const mail = mailjetTemplates.COURSESUPCOMINGREMINDERPARTICIPANT({
         participantFirstname: participant.firstname,
         courseName: course.name,
@@ -56,7 +79,13 @@ export async function sendCourseUpcomingReminderParticipant(participant: Pupil, 
     await sendTemplateMail(mail, participant.email);
 }
 
-export async function sendInstructorGroupMail(participant: Pupil, instructor: Student, course: Course, messageTitle: string, messageBody: string) {
+export async function sendInstructorGroupMail(
+    participant: Pupil,
+    instructor: Student,
+    course: Course,
+    messageTitle: string,
+    messageBody: string
+) {
     const mail = mailjetTemplates.COURSEINSTRUCTORGROUPMAIL({
         participantFirstName: participant.firstname,
         instructorFirstName: instructor.firstname,

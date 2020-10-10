@@ -1,24 +1,34 @@
-import { EntityManager } from "typeorm";
 import { Student } from "../../../entity/Student";
-import { sendFirstScreeningInvitationMail, sendFirstInstructorScreeningInvitationMail } from "../../../mails/screening";
+import {
+    sendFirstScreeningInvitationMail,
+    sendFirstInstructorScreeningInvitationMail
+} from "../../../mails/screening";
 
-
-export async function sendFirstScreeningInvitationToTutor(manager: EntityManager, student: Student) {
-    //send actual mail...
+async function sendTutorInvitation(
+    saveUser: (user: Student) => Promise<void>,
+    student: Student
+) {
     await sendFirstScreeningInvitationMail(student);
-
-    //... store that in the database
     student.lastSentScreeningInvitationDate = new Date();
-
-    await manager.save(student);
+    await saveUser(student);
 }
 
-export async function sendFirstScreeningInvitationToInstructor(manager: EntityManager, student: Student) {
-    //send actual mail...
+async function sendInstructorInvitation(
+    saveUser: (user: Student) => Promise<void>,
+    student: Student
+) {
     await sendFirstInstructorScreeningInvitationMail(student);
-
-    //... store that in the database
     student.lastSentInstructorScreeningInvitationDate = new Date();
+    await saveUser(student);
+}
 
-    await manager.save(student);
+export function sendScreeningInvitation(
+    saveUser: (user: Student) => Promise<void>,
+    student: Student
+) {
+    if (student.isInstructor) {
+        return sendInstructorInvitation(saveUser, student);
+    }
+
+    return sendTutorInvitation(saveUser, student);
 }

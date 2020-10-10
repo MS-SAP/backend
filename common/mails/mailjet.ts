@@ -1,10 +1,13 @@
 import { mailjetSmtp } from "./config";
-import * as mailjetAPI from "node-mailjet";
+import mailjetAPI from "node-mailjet";
 import { getLogger } from "log4js";
 
 const logger = getLogger();
 
-async function sendMessage(message: mailjetAPI.Email.SendParamsMessage, sandbox: boolean = false) {
+async function sendMessage(
+    message: mailjetAPI.Email.SendParamsMessage,
+    sandbox: boolean = false
+) {
     //determine whether we have sandbox mode or not...
     let sandboxMode = sandbox;
 
@@ -14,20 +17,25 @@ async function sendMessage(message: mailjetAPI.Email.SendParamsMessage, sandbox:
         sandboxMode = true;
     }
 
-    const mailjet = mailjetAPI.connect(mailjetSmtp.auth.user, mailjetSmtp.auth.pass);
+    const mailjet = mailjetAPI.connect(
+        mailjetSmtp.auth.user,
+        mailjetSmtp.auth.pass
+    );
 
     //send actual email
     let requestOptions: mailjetAPI.Email.SendParams = {
         SandboxMode: sandboxMode,
-        Messages: [
-            message
-        ]
+        Messages: [message]
     };
 
     //log what is sent to mailjet, so we can better debug some problems with mails
-    logger.info(`Sending send-request to Mailjet: ${JSON.stringify(requestOptions)}`);
+    logger.info(
+        `Sending send-request to Mailjet: ${JSON.stringify(requestOptions)}`
+    );
 
-    return await mailjet.post("send", { version: "v3.1" }).request(requestOptions);
+    return await mailjet
+        .post("send", { version: "v3.1" })
+        .request(requestOptions);
 }
 
 async function sendMailPure(
@@ -43,7 +51,7 @@ async function sendMailPure(
 ) {
     // construct mailjet API message
     const message: mailjetAPI.Email.SendParamsMessage = {
-        From: {
+        From: {
             Email: senderAddress,
             Name: senderName
         },

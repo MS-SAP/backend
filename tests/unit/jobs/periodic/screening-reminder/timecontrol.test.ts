@@ -1,6 +1,6 @@
-import * as _ from "lodash";
-import {shouldRemindAtDate} from "../../../../../jobs/periodic/screening-reminder/timecontrol";
-import {assert} from "chai";
+import _ from "lodash";
+import { shouldRemindAtDate } from "../../../../../jobs/periodic/screening-reminder/timecontrol";
+import { assert } from "chai";
 
 function createDateWithRandomTime(day, month, year) {
     if (!_.inRange(day, 0, 32) || !_.inRange(month, 1, 13)) {
@@ -13,10 +13,10 @@ function createDateWithRandomTime(day, month, year) {
     return new Date(year, month - 1, day, hour, minute, second);
 }
 
-describe("Screening Reminder Time Handling", function() {
+describe("Screening Reminder Time Handling", function () {
     this.timeout(5000);
 
-    it("Dates which are dates to send reminders or not", function() {
+    it("Dates which are dates to send reminders or not", function () {
         // Arrange
         const christmasEve = createDateWithRandomTime(24, 12, 2020);
         const christmas = createDateWithRandomTime(25, 12, 2023);

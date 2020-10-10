@@ -1,13 +1,15 @@
-import {assert} from "chai";
-import * as sinon from "sinon";
+import { assert } from "chai";
+import sinon from "sinon";
 import mailjet from "../../common/mails/mailjet";
-import {DEFAULTSENDERS} from "../../common/mails/config";
-import {Connection} from "typeorm";
+import { DEFAULTSENDERS } from "../../common/mails/config";
+import { Connection } from "typeorm";
 import TestStudents from "../utils/TestStudents";
-import {verifyToken} from "../../web/controllers/tokenController";
-import databaseHelper from "../utils/databaseHelper";
 
-describe("Screening Invitation", function() {
+import databaseHelper from "../utils/databaseHelper";
+import { getUserWithToken } from "../../common/util/databaseUtil";
+import { tokenService } from "../../web/services/tokenService";
+
+describe("Screening Invitation", function () {
     this.timeout(10000);
 
     // The connection that should be used for tests
@@ -15,7 +17,7 @@ describe("Screening Invitation", function() {
     let sandbox = sinon.createSandbox();
 
     before(() => {
-        return databaseHelper.createConnection().then(response => {
+        return databaseHelper.createConnection().then((response) => {
             connection = response;
         });
     });
@@ -46,38 +48,82 @@ describe("Screening Invitation", function() {
 
         // save test student
         return new Promise((resolve) => {
-            manager.save(testStudent).then(() => {
+            manager.save(testStudent).then(async () => {
                 //setup mailjetStub
                 const mailjetStub = sandbox.spy(mailjet, "sendTemplate");
 
                 // Act
-                verifyToken(verificationToken).then(() => {
+                getUserWithToken(verificationToken)
+                    .then((user) => tokenService.verifyToken(user))
+                    .then(() => {
+                        // Assert
+                        assert.strictEqual(mailjetStub.callCount, 2);
 
-                    // Assert
-                    assert.strictEqual(mailjetStub.callCount, 2);
+                        const dashboardURLUUIDMatchRegex = new RegExp(
+                            /^https:\/\/my.corona-school.de\/login\?token=[0-9A-F]{8}-[0-9A-F]{4}-4[0-9A-F]{3}-[89AB][0-9A-F]{3}-[0-9A-F]{12}/i
+                        );
 
-                    const dashboardURLUUIDMatchRegex = new RegExp(
-                        /^https:\/\/my.corona-school.de\/login\?token=[0-9A-F]{8}-[0-9A-F]{4}-4[0-9A-F]{3}-[89AB][0-9A-F]{3}-[0-9A-F]{12}/i
-                    );
+                        assert.strictEqual(
+                            mailjetStub.getCall(0).args[0],
+                            "Corona School - Dein Account"
+                        );
+                        assert.strictEqual(
+                            mailjetStub.getCall(0).args[1],
+                            DEFAULTSENDERS.noreply
+                        );
+                        assert.strictEqual(
+                            mailjetStub.getCall(0).args[2],
+                            testStudent.email
+                        );
+                        assert.strictEqual(
+                            mailjetStub.getCall(0).args[3],
+                            1337159
+                        );
+                        assert.strictEqual(
+                            mailjetStub.getCall(0).args[4].personFirstname,
+                            testStudent.firstname
+                        );
+                        assert.ok(
+                            dashboardURLUUIDMatchRegex.test(
+                                mailjetStub.getCall(0).args[4].dashboardURL
+                            )
+                        );
+                        assert.strictEqual(
+                            mailjetStub.getCall(0).args[5],
+                            false
+                        );
 
-                    assert.strictEqual(mailjetStub.getCall(0).args[0], "Corona School - Dein Account");
-                    assert.strictEqual(mailjetStub.getCall(0).args[1], DEFAULTSENDERS.noreply);
-                    assert.strictEqual(mailjetStub.getCall(0).args[2], testStudent.email);
-                    assert.strictEqual(mailjetStub.getCall(0).args[3], 1337159);
-                    assert.strictEqual(mailjetStub.getCall(0).args[4].personFirstname, testStudent.firstname);
-                    assert.ok(dashboardURLUUIDMatchRegex.test(mailjetStub.getCall(0).args[4].dashboardURL));
-                    assert.strictEqual(mailjetStub.getCall(0).args[5], false);
+                        assert.strictEqual(
+                            mailjetStub.getCall(1).args[0],
+                            "Wir möchten dich kennenlernen!"
+                        );
+                        assert.strictEqual(
+                            mailjetStub.getCall(1).args[1],
+                            DEFAULTSENDERS.screening
+                        );
+                        assert.strictEqual(
+                            mailjetStub.getCall(1).args[2],
+                            testStudent.email
+                        );
+                        assert.strictEqual(
+                            mailjetStub.getCall(1).args[3],
+                            1362938
+                        );
+                        assert.strictEqual(
+                            mailjetStub.getCall(1).args[4].personFirstname,
+                            testStudent.firstname
+                        );
+                        assert.strictEqual(
+                            mailjetStub.getCall(1).args[4].confirmationURL,
+                            testStudent.screeningURL()
+                        );
+                        assert.strictEqual(
+                            mailjetStub.getCall(1).args[5],
+                            false
+                        );
 
-                    assert.strictEqual(mailjetStub.getCall(1).args[0], "Wir möchten dich kennenlernen!");
-                    assert.strictEqual(mailjetStub.getCall(1).args[1], DEFAULTSENDERS.screening);
-                    assert.strictEqual(mailjetStub.getCall(1).args[2], testStudent.email);
-                    assert.strictEqual(mailjetStub.getCall(1).args[3], 1362938);
-                    assert.strictEqual(mailjetStub.getCall(1).args[4].personFirstname, testStudent.firstname);
-                    assert.strictEqual(mailjetStub.getCall(1).args[4].confirmationURL, testStudent.screeningURL());
-                    assert.strictEqual(mailjetStub.getCall(1).args[5], false);
-
-                    resolve();
-                });
+                        resolve();
+                    });
             });
         });
     });

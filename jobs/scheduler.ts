@@ -1,13 +1,11 @@
-import * as cron from "cron";
-import {Mutex} from 'async-mutex';
+import cron from "cron";
+import { Mutex } from "async-mutex";
 import { getLogger } from "log4js";
 import { Connection, createConnection, EntityManager } from "typeorm";
 import { CSCronJob } from "./types";
 import { invalidateActiveTransactionLog } from "../common/transactionlog";
 
 const logger = getLogger();
-
-
 
 const activeConnectionMutex = new Mutex();
 let jobConnection: Connection;
@@ -18,9 +16,10 @@ async function getActiveJobConnection() {
     if (!jobConnection) {
         logger.info("Create new connection to database...");
         jobConnection = await createConnection();
-    }
-    else if (!jobConnection.isConnected) {
-        logger.info("Job database connection is no longer connected. Reconnect...");
+    } else if (!jobConnection.isConnected) {
+        logger.info(
+            "Job database connection is no longer connected. Reconnect..."
+        );
         //Do this always, to have no transaction log that uses a connection that was closed (which then would result in errors)
         invalidateActiveTransactionLog(); // that might not be necessary here, but include it for safety reasons
         await jobConnection.connect();
@@ -31,9 +30,12 @@ async function getActiveJobConnection() {
     return jobConnection;
 }
 
-
-function executeJob(job: (manager: EntityManager) => Promise<void>, jobConnectionGetter: () => Promise<Connection>): () => Promise<void> {
-    return async function() { //return a real function, not an arrow-function here, because we need this to be set according to the context defined as part of the CronJob creation
+function executeJob(
+    job: (manager: EntityManager) => Promise<void>,
+    jobConnectionGetter: () => Promise<Connection>
+): () => Promise<void> {
+    return async function () {
+        //return a real function, not an arrow-function here, because we need this to be set according to the context defined as part of the CronJob creation
         //"this" is the context of the cron-job -> see definition of node cron package
         this.stop(); //start stop, so that the same job is never executed in parallel
 
@@ -47,9 +49,10 @@ function executeJob(job: (manager: EntityManager) => Promise<void>, jobConnectio
 
             //execute the job with the manager
             await job(manager);
-        }
-        catch (e) {
-            logger.error(`Can't execute job: ${job.name} due to error with message: ${e.message}`);
+        } catch (e) {
+            logger.error(
+                `Can't execute job: ${job.name} due to error with message: ${e.message}`
+            );
             logger.debug(e);
         }
 
@@ -57,21 +60,19 @@ function executeJob(job: (manager: EntityManager) => Promise<void>, jobConnectio
     };
 }
 
-
 ///Schedules a given set of Corona School Cron Jobs
 export async function scheduleJobs(jobs: CSCronJob[]) {
     //create actual cron jobs
-    const cronJobs = jobs.map( j => {
+    const cronJobs = jobs.map((j) => {
         return cron.job({
             cronTime: j.cronTime,
             runOnInit: false,
             onTick: executeJob(j.jobFunction, getActiveJobConnection)
         });
-    }
-    );
+    });
 
     //and start them...
-    cronJobs.forEach( j => j.start() );
+    cronJobs.forEach((j) => j.start());
 
     logger.info("Jobs scheduled...");
 }
