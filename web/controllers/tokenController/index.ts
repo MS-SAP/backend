@@ -1,19 +1,10 @@
 import { getLogger } from "log4js";
 import { Request, Response } from "express";
-import { getManager } from "typeorm";
-import { Person } from "../../../common/entity/Person";
-import { Pupil } from "../../../common/entity/Pupil";
-import { Student } from "../../../common/entity/Student";
-import { mailjetTemplates, sendTemplateMail } from "../../../common/mails";
-import { v4 as uuidv4 } from "uuid";
-import { hashToken } from "../../../common/util/hashing";
-import { getTransactionLog } from "../../../common/transactionlog";
-import VerifiedEvent from "../../../common/transactionlog/types/VerifiedEvent";
-import * as moment from "moment";
+import { tokenService } from "../../services/tokenService";
 import {
-    sendFirstScreeningInvitationToInstructor,
-    sendFirstScreeningInvitationToTutor
-} from "../../../common/administration/screening/initial-invitations";
+    getUserWithEmail,
+    getUserWithToken
+} from "../../../common/util/databaseUtil";
 
 const logger = getLogger();
 
@@ -40,96 +31,28 @@ const logger = getLogger();
  * @apiUse StatusInternalServerError
  */
 export async function verifyTokenHandler(req: Request, res: Response) {
-    if (req.body.token) {
-        let emailToken = req.body.token;
-
-        let authToken = await verifyToken(emailToken);
-        if (authToken) {
-            return res.status(200).send({ token: authToken });
-        } else {
-            return res.status(400).end();
-        }
-    } else {
-        // token field missing
-        res.status(400).end();
+    if (!req.body.token) {
+        return res
+            .status(400)
+            .send({ error: "token is missing in request." })
+            .end();
     }
-}
 
-export async function verifyToken(token: string): Promise<string | null> {
-    try {
-        const entityManager = getManager();
-        const transactionLog = getTransactionLog();
-
-        // Try to find student
-        let student = await entityManager.findOne(Student, {
-            verification: token
-        });
-
-        if (student instanceof Student) {
-            // Found valid student
-            student.verification = null;
-            student.verifiedAt = new Date();
-            logger.info("Token " + token + " verified");
-
-            // Generate UUID
-            const uuid = uuidv4();
-            student.authToken = hashToken(uuid);
-            student.authTokenSent = new Date();
-            student.authTokenUsed = false;
-            logger.info("Generated and sending UUID " + uuid + " to " + student.email);
-
-            await entityManager.save(student);
-
-            try {
-                await sendLoginTokenMail(student, uuid);
-                if (student.isInstructor) {
-                    // Invite to instructor screening
-                    await sendFirstScreeningInvitationToInstructor(entityManager, student);
-                } else {
-                    // Invite to tutor screening
-                    await sendFirstScreeningInvitationToTutor(entityManager, student);
-                }
-            } catch (mailerror) {
-                logger.error(`Can't send emails to student ${student.email} after verification due to mail error...`);
-                logger.debug(mailerror);
-            }
-
-            await transactionLog.log(new VerifiedEvent(student));
-
-            return uuid;
-        }
-
-        // Try to find pupil instead
-        let pupil = await entityManager.findOne(Pupil, { verification: token });
-
-        if (pupil instanceof Pupil) {
-            // Found valid pupil
-            pupil.verification = null;
-            pupil.verifiedAt = new Date();
-            logger.info("Token " + token + " verified");
-
-            // Generate UUID
-            const uuid = uuidv4();
-            pupil.authToken = hashToken(uuid);
-            pupil.authTokenSent = new Date();
-            pupil.authTokenUsed = false;
-
-            logger.info("Generated and sending UUID " + uuid + " to " + pupil.email);
-
-            await sendLoginTokenMail(pupil, uuid);
-            await entityManager.save(pupil);
-            await transactionLog.log(new VerifiedEvent(pupil));
-
-            return uuid;
-        }
-
-        logger.info("Can't verify token " + token);
-        return null;
-    } catch (e) {
-        logger.error("Can't verify token: ", e.message);
-        logger.debug(e);
-        return null;
+    const token: string = req.body.token;
+    const user = await getUserWithToken(token);
+    if (!user) {
+        return res
+            .status(400)
+            .send({ error: "can't find user with token." })
+            .end();
     }
+
+    const authToken = await tokenService.verifyToken(user);
+    if (!authToken) {
+        return res.status(400).send({ error: "token is not valid." }).end();
+    }
+
+    return res.status(200).send({ token: authToken });
 }
 
 /**
@@ -157,101 +80,44 @@ export async function verifyToken(token: string): Promise<string | null> {
  * @apiUse StatusInternalServerError
  */
 export async function getNewTokenHandler(req: Request, res: Response) {
-    let status = 204;
-
     try {
-        if (req.query.email) {
-            let email = (req.query.email as string).trim().toLowerCase();
-
-            const entityManager = getManager();
-            const transactionLog = getTransactionLog();
-
-            let person: (Pupil | Student);
-            person = await entityManager.findOne(Student, { email: email });
-            if (person == undefined) {
-                person = await entityManager.findOne(Pupil, { email: email });
-            }
-
-            if (person !== undefined) {
-                if (allowedToRequestToken(person)) {
-                    if (req.query.redirectTo !== undefined && typeof req.query.redirectTo !== "string")
-                        status = 400;
-
-                    logger.info("Sending new auth token to user", person.id);
-
-                    // Generate a new UUID
-                    const uuid = uuidv4();
-                    person.authToken = hashToken(uuid);
-                    person.authTokenSent = new Date();
-                    person.authTokenUsed = false;
-
-                    logger.info("Generated and sending UUID " + uuid + " to " + person.email);
-                    await sendLoginTokenMail(person, uuid, req.query.redirectTo);
-
-
-                    // Save new token to database and log action
-                    await entityManager.save(person);
-                    await transactionLog.log(new VerifiedEvent(person));
-                } else {
-                    // rate limited
-                    logger.info("Not sending auth token: rate limit time not passed yet", person.authTokenSent);
-                    status = 403;
-                }
-            } else {
-                // email not found
-                logger.info("Not sending auth token: email/person not found", email);
-                status = 404;
-            }
-        } else {
-            // E-Mail missing in query
-            status = 400;
+        if (!req.query.email) {
+            return res
+                .status(400)
+                .send({ error: "emai is missing in request." })
+                .end();
         }
+
+        if (
+            req.query.redirectTo !== undefined &&
+            typeof req.query.redirectTo !== "string"
+        ) {
+            return res
+                .status(400)
+                .send({ error: "redirectTo is missing in request," })
+                .end();
+        }
+
+        const email = req.query.email.trim().toLowerCase();
+
+        const user = await getUserWithEmail(email);
+        if (!user) {
+            return res
+                .status(400)
+                .send({ error: "can't find user with given email" })
+                .end();
+        }
+        if (!tokenService.allowedToRequestToken(user)) {
+            return res
+                .status(400)
+                .send({ error: "user is not allowed to request a new token." })
+                .end();
+        }
+        await tokenService.requestNewToken(user);
+        res.status(204).end();
     } catch (e) {
         logger.error("Failed to send or safe new auth token: ", e.message);
         logger.debug(e);
-        status = 500;
-    }
-
-    res.status(status).end();
-}
-
-function allowedToRequestToken(person: Person): boolean {
-    // Deactivated users may not request tokens
-    if (person.active == false) {
-        logger.debug("Token requested by decativated user");
-        return false;
-    }
-
-    // Always allow if never sent authTokens (only valid for legacy users)
-    if (person.authTokenSent == null) {
-        logger.debug("Token allowed, last sent was null");
-        return true;
-    }
-
-    // If previous reset is less than 24 hours ago, disallow for unused tokens
-    if (moment(person.authTokenSent).isAfter(moment().subtract(1, "days")) && !person.authTokenUsed) {
-        logger.debug("Token was disallowed, rate-limited while token was unused");
-        return false;
-    }
-
-    // If time is passed or token was used, alway allow resetting
-    logger.debug("Token allowed");
-    return true;
-}
-
-export async function sendLoginTokenMail(person: Person, token: string, redirectTo?: string) {
-    const dashboardURL = `https://my.corona-school.de/login?token=${token}&path=${redirectTo ?? ""}`;
-
-    console.log(dashboardURL);
-
-    try {
-        const mail = mailjetTemplates.LOGINTOKEN({
-            personFirstname: person.firstname,
-            dashboardURL: dashboardURL
-        });
-        await sendTemplateMail(mail, person.email);
-    } catch (e) {
-        logger.error("Can't send login token mail: ", e.message);
-        logger.debug(e);
+        res.status(500).end();
     }
 }
